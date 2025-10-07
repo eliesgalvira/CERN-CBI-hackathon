@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <Servo.h>
 
-static const int SERVO_PIN = 3;
+static const int SERVO_PIN = 5;
 Servo servo;
 
 void setup() {
@@ -10,7 +10,6 @@ void setup() {
 }
 
 void loop() {
-
   // Sweep 0 -> 90
   for (int pos = 20; pos <= 60; pos++) {
     servo.write(pos);
