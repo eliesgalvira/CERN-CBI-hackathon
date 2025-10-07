@@ -1,0 +1,24 @@
+#include <Arduino.h>
+#include <Servo.h>
+
+static const int SERVO_PIN = 3;
+Servo servo;
+
+void setup() {
+  servo.attach(SERVO_PIN);
+  servo.write(20); // initial position flip flop
+}
+
+void loop() {
+
+  // Sweep 0 -> 90
+  for (int pos = 20; pos <= 60; pos++) {
+    servo.write(pos);
+    delay(10); // speed of sweep
+  }
+  // Sweep 90 -> 0
+  for (int pos = 60; pos >= 20; pos--) {
+    servo.write(pos);
+    delay(10);
+  }
+}
