@@ -1,0 +1,102 @@
+#include <Arduino.h>
+
+static const uint8_t PIN_SENSOR = A0;
+const float VREF = 5.0f;
+const int ADC_MAX = 1023;
+
+static const uint16_t SAMPLE_HZ = 200;
+static const uint8_t OVERSAMPLE = 4;
+
+// Delta thresholds in volts (relative to baseline)
+// Start with small values and increase as needed
+float delta_no_ball_v = 0.02f;  // <= this => no_ball (~20 mV)
+float delta_plastic_v = 0.08f;  // <= this => plastic
+float delta_glass_v   = 0.16f;  // <= this => glass
+// > delta_glass_v => metal
+
+// Convert volts to raw counts
+static inline int vToRaw(float v) {
+  if (v <= 0) return 0;
+  float r = (v / VREF) * ADC_MAX;
+  if (r > ADC_MAX) r = ADC_MAX;
+  return (int)(r + 0.5f);
+}
+
+int d_no, d_pl, d_gl;
+
+// Baseline tracking
+// Use an exponential moving average for baseline with a long time constant
+// alpha defines how fast the baseline adapts; smaller = slower
+const float BASELINE_ALPHA = 0.002f; // ~slow; adjust 0.001–0.01
+float baselineRawF = 512.0f;         // initialize near your observed 521
+int baselineRaw = 512;
+
+unsigned long nextSampleMs = 0;
+
+void setup() {
+  pinMode(PIN_SENSOR, INPUT);
+  Serial.begin(9600);
+  while (!Serial) {}
+
+  d_no = vToRaw(delta_no_ball_v);
+  d_pl = vToRaw(delta_plastic_v);
+  d_gl = vToRaw(delta_glass_v);
+
+  // Initialize baseline closer to current reading
+  long acc = 0;
+  for (int i = 0; i < 16; i++) acc += analogRead(PIN_SENSOR);
+  baselineRawF = acc / 16.0f;
+  baselineRaw = (int)(baselineRawF + 0.5f);
+
+  Serial.println(F("timestamp_ms,raw,volts,baseline_raw,delta_raw,delta_v,label"));
+}
+
+const char* classifyDelta(int draw) {
+  // draw = absolute(raw - baseline)
+  if (draw <= d_no) return "no_ball";
+  if (draw <= d_pl) return "plastic";
+  if (draw <= d_gl) return "glass";
+  return "metal";
+}
+
+void loop() {
+  unsigned long now = millis();
+  if (now >= nextSampleMs) {
+    nextSampleMs = now + (1000UL / SAMPLE_HZ);
+
+    // Oversample A0
+    long acc = 0;
+    for (uint8_t i = 0; i < OVERSAMPLE; i++) acc += analogRead(PIN_SENSOR);
+    int raw = (int)(acc / OVERSAMPLE);
+
+    // Update baseline (EMA)
+    // Do not let large transients move baseline too fast; clamp step
+    float err = (float)raw - baselineRawF;
+    float step = err * BASELINE_ALPHA;
+    // Optional clamp to avoid baseline chasing big spikes
+    if (step > 0.5f) step = 0.5f;
+    if (step < -0.5f) step = -0.5f;
+    baselineRawF += step;
+    baselineRaw = (int)(baselineRawF + 0.5f);
+
+    int deltaRaw = abs(raw - baselineRaw);
+    float volts = (raw * 1.0f / ADC_MAX) * VREF;
+    float deltaV = (deltaRaw * 1.0f / ADC_MAX) * VREF;
+
+    const char* label = classifyDelta(deltaRaw);
+
+    Serial.print(now);
+    Serial.print(',');
+    Serial.print(raw);
+    Serial.print(',');
+    Serial.print(volts, 4);
+    Serial.print(',');
+    Serial.print(baselineRaw);
+    Serial.print(',');
+    Serial.print(deltaRaw);
+    Serial.print(',');
+    Serial.print(deltaV, 4);
+    Serial.print(',');
+    Serial.println(label);
+  }
+}
