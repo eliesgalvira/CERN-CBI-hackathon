@@ -1,0 +1,9 @@
+{
+  "C_Cpp.default.configurationProvider": "platformio.platformio-ide",
+  "C_Cpp.intelliSenseEngine": "Default",
+  "files.associations": {
+    "*.ino": "cpp",
+    "Arduino.h": "cpp",
+    "*.tcc": "cpp"
+  }
+}
